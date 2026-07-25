@@ -1,6 +1,6 @@
 {
   "name": "steam-achievements",
-  "version": "1.2.0",
+  "version": "1.2.2",
   "description": "Display Steam achievement progress on Steam Deck library pages",
   "type": "module",
   "scripts": {
