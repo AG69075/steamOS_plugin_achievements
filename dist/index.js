@@ -116,21 +116,6 @@ const useSettings = () => {
     return { settings, setSetting: setPartialSetting };
 };
 
-// ─── Backend settings (API key / SteamID64 for fallback) ─────────────────────
-
-const safeCall = async (...args) => {
-    if (typeof call !== 'function') {
-        console.warn('[steam-achievements] api.call is not available in this @decky/api version — backend fallback disabled.');
-        return undefined;
-    }
-    try {
-        return await call(...args);
-    } catch (err) {
-        console.error(`[steam-achievements] call(${JSON.stringify(args[0])}) failed:`, err);
-        return undefined;
-    }
-};
-
 // ─── Settings Panel ───────────────────────────────────────────────────────────
 
 const SettingsPanel = () => {
@@ -263,11 +248,10 @@ const queryAchievements = async (appid) => {
     const local = await tryLocalAchievements(appid);
     if (local) return local;
 
-    // Fallback: Python backend / Steam Web API (requires API key + SteamID64).
-    const result = await safeCall('get_achievements', appid);
-    console.log(`[steam-achievements] backend result for appid ${appid}:`, result);
-    if (!result) return { found: false, error: 'No response from backend' };
-    return { ...result, source: 'api' };
+    // No fallback: the backend no longer implements a Steam Web API lookup
+    // (API key / SteamID64 requirement removed). If the local SteamClient
+    // method didn't return data, we simply have none for this app.
+    return { found: false, error: 'No achievement data available' };
 };
 
 const useAchievements = (appid) => {
@@ -403,6 +387,67 @@ const useScrolledDown = (rootRef) => {
     return scrolled;
 };
 
+// ─── Global "game launching" tracker ──────────────────────────────────────────
+// Registered ONCE at plugin mount (not per badge-instance) so it survives the
+// badge component being torn down/rebuilt frequently by route re-renders,
+// which was causing the per-component registration to miss the real event.
+// actionName === 'LaunchApp' on GameActionStart is confirmed against the
+// HLTB for Deck plugin's compiled bundle. GameActionEnd's strAppId/actionName
+// were observed to come back undefined on this SteamOS version, so any End
+// event just clears the tracked appid (only one game launches at a time in
+// practice).
+let _launchingAppid = null;
+let _launchingSafetyTimer = null;
+const _launchListeners = new Set();
+const _notifyLaunchListeners = () => { _launchListeners.forEach((fn) => { try { fn(); } catch (_err) { /* ignore */ } }); };
+const _clearLaunching = () => {
+    if (_launchingSafetyTimer) { clearTimeout(_launchingSafetyTimer); _launchingSafetyTimer = null; }
+    _launchingAppid = null;
+    _notifyLaunchListeners();
+};
+
+const registerGameActionTracking = () => {
+    console.log('[steam-achievements] registerGameActionTracking() called at plugin mount.');
+    let onStart, onEnd;
+    try {
+        onStart = window.SteamClient?.Apps?.RegisterForGameActionStart?.((_actionType, strAppId, actionName) => {
+            if (actionName !== 'LaunchApp') return;
+            _launchingAppid = parseInt(strAppId, 10);
+            console.log(`[steam-achievements] (global) GameActionStart LaunchApp for ${_launchingAppid}`);
+            _notifyLaunchListeners();
+            // Safety net: GameActionEnd isn't always reliable (observed with
+            // undefined strAppId/actionName on some SteamOS versions), so
+            // never stay hidden longer than this even if End never fires.
+            if (_launchingSafetyTimer) clearTimeout(_launchingSafetyTimer);
+            _launchingSafetyTimer = setTimeout(() => {
+                console.log('[steam-achievements] (global) launching safety timeout — clearing state.');
+                _clearLaunching();
+            }, 20000);
+        });
+        onEnd = window.SteamClient?.Apps?.RegisterForGameActionEnd?.(() => {
+            console.log('[steam-achievements] (global) GameActionEnd — clearing launching state');
+            _clearLaunching();
+        });
+    } catch (err) {
+        console.warn('[steam-achievements] RegisterForGameActionStart/End unavailable:', err);
+    }
+    return () => {
+        try { onStart?.unregister?.(); } catch (_err) { /* ignore */ }
+        try { onEnd?.unregister?.(); } catch (_err) { /* ignore */ }
+        if (_launchingSafetyTimer) { clearTimeout(_launchingSafetyTimer); _launchingSafetyTimer = null; }
+    };
+};
+
+const useIsGameLaunching = (appid) => {
+    const [, forceRender] = SP_REACT.useReducer((c) => c + 1, 0);
+    SP_REACT.useEffect(() => {
+        const listener = () => forceRender();
+        _launchListeners.add(listener);
+        return () => { _launchListeners.delete(listener); };
+    }, []);
+    return appid != null && _launchingAppid === appid;
+};
+
 const AchievementsBadge = () => {
     const { appid } = useParams();
     const numericAppid = appid ? parseInt(appid, 10) : undefined;
@@ -412,10 +457,14 @@ const AchievementsBadge = () => {
     const { position, horizontalOffset, verticalOffset, showTrophyIcon } = settings;
     const rootRef = SP_REACT.useRef(null);
     const scrolledDown = useScrolledDown(rootRef);
+    const isLaunching = useIsGameLaunching(numericAppid);
 
     const scoreColor = SP_REACT.useMemo(() => colorForPct(data?.achievements_pct), [data?.achievements_pct]);
 
     if (!numericAppid) return SP_REACT.createElement(SP_REACT.Fragment, null);
+
+    // Hide while the game is launching.
+    if (isLaunching) return SP_REACT.createElement(SP_REACT.Fragment, null);
 
     // Hide once the user has scrolled down into the Activity/Your Stuff/etc. section.
     if (scrolledDown) return SP_REACT.createElement(SP_REACT.Fragment, null);
@@ -434,7 +483,7 @@ const AchievementsBadge = () => {
             : 0;
         const isComplete = data.achievements_total > 0 && data.achievements_unlocked === data.achievements_total;
 
-        return SP_REACT.createElement("div", { className: "achdeck-scores", style: { gap: showTrophyIcon ? '2px' : '8px' } },
+        return SP_REACT.createElement("div", { className: "achdeck-scores", style: { gap: showTrophyIcon ? '3px' : '8px' } },
             SP_REACT.createElement("div", { className: "achdeck-row achdeck-label-row" },
                 SP_REACT.createElement("span", { className: "achdeck-icon-slot", style: { width: 20, minWidth: 20 } },
                     showTrophyIcon ? SP_REACT.createElement(AchievementIcon, { size: 15 }) : null),
@@ -557,12 +606,14 @@ function patchLibraryApp() {
 
 var index = DFL.definePlugin(() => {
     const libraryPatch = patchLibraryApp();
+    const unregisterGameActionTracking = registerGameActionTracking();
     return {
         title: SP_REACT.createElement("div", { className: DFL.staticClasses.Title }, "Steam Achievements"),
         icon: SP_REACT.createElement(AchievementIcon, null),
         content: SP_REACT.createElement(AchievementsErrorBoundary, null, SP_REACT.createElement(SettingsPanel, null)),
         onDismount() {
             routerHook.removePatch('/library/app/:appid', libraryPatch);
+            unregisterGameActionTracking();
         }
     };
 });

@@ -13,16 +13,15 @@ A [Decky Loader](https://decky.xyz/) plugin for Steam Deck that shows your achie
 - A blue completion ribbon appears next to the score once you've unlocked 100% of a game's achievements.
 - Automatically hides itself:
   - on non-Steam games / shortcuts with no achievement data,
-  - once you scroll down into the native Activity / Your Stuff / Community / Game Info section (Steam already shows its own achievement progress there).
+  - once you scroll down into the native Activity / Your Stuff / Community / Game Info section (Steam already shows its own achievement progress there),
+  - while the game is launching, so it doesn't linger on top of the native "now playing" UI.
 - Adjustable badge position (top-left, top-right, top-center) and horizontal/vertical offset from the plugin's Quick Access Menu settings panel.
 - Toggle to show/hide the trophy icon next to the "ACHIEVEMENTS" label.
 - Local caching (30 min) to avoid unnecessary lookups.
 ## How it works
-The plugin patches the `/library/app/:appid` route to inject the badge. It first tries to read your achievement data directly from the Steam client itself (`SteamClient.Apps.GetMyAchievementsForApp`) — no account setup needed. If that's ever unavailable (e.g. a SteamOS update changes the internal API), it falls back to a small Python backend that calls the official [Steam Web API](https://steamcommunity.com/dev) (`ISteamUserStats/GetPlayerAchievements`) instead.
+The plugin patches the `/library/app/:appid` route to inject the badge, reading achievement data directly from the Steam client itself (`SteamClient.Apps.GetMyAchievementsForApp`) — no account setup needed. The badge hides itself while a game is launching by listening for `SteamClient.Apps.RegisterForGameActionStart`/`RegisterForGameActionEnd` (`LaunchApp` action).
 ## Requirements
-None for normal use — the badge reads achievement data directly from the Steam client.
-
-The Steam Web API fallback (only used if the local method stops working) would additionally require a Steam Web API key, your SteamID64, and a public profile, but there's currently no settings UI for these since they're not needed in practice.
+None — the badge reads achievement data directly from the Steam client, with no Steam Web API key, SteamID64, or public profile needed.
 ## Installation
 1. Download the latest release ZIP (or clone this repo).
 2. Transfer it to your Steam Deck.
@@ -38,7 +37,7 @@ The Steam Web API fallback (only used if the local method stops working) would a
 ## Project structure
 ```
 .
-├── main.py        # Python backend: Steam Web API fallback, manages settings
+├── main.py        # Python backend: manages settings only
 ├── dist/
 │   └── index.js   # Frontend: badge UI, route patching, settings panel
 ├── plugin.json     # Decky plugin manifest
@@ -46,7 +45,7 @@ The Steam Web API fallback (only used if the local method stops working) would a
 ```
 ## Known limitations
 - Only works for native Steam games with achievements — non-Steam shortcuts (EmuDeck/ROMs) are not supported.
-- Relies on an undocumented internal Steam client API (`SteamClient.Apps.GetMyAchievementsForApp`), which could change or break in a future SteamOS/Steam client update.
+- Relies on undocumented internal Steam client APIs (`SteamClient.Apps.GetMyAchievementsForApp`, `RegisterForGameActionStart`/`End`), which could change or break in a future SteamOS/Steam client update. There is no Steam Web API fallback anymore — if these break, the badge simply won't show data until the plugin is updated.
 ## Credits
 Built for personal use on Steam Deck. UI patching approach and Steam icon inspired by the open-source [Achievement Companion](https://github.com/CodeNode-Automation/achievement-companion) Decky plugin.
 ## License
