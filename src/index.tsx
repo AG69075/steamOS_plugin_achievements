@@ -1,4 +1,4 @@
-import { call, definePlugin, routerHook } from "@decky/api";
+import { definePlugin, routerHook } from "@decky/api";
 import {
   PanelSection,
   PanelSectionRow,
@@ -145,20 +145,10 @@ const useSettings = () => {
   return { settings, setSetting };
 };
 
-// ─── Backend settings (API key / SteamID64 for fallback) ───────────────────
-
-const safeCall = async <Return = any,>(...args: [string, ...any[]]): Promise<Return | undefined> => {
-  if (typeof call !== "function") {
-    console.warn("[steam-achievements] api.call is not available in this @decky/api version — backend fallback disabled.");
-    return undefined;
-  }
-  try {
-    return await call<any[], Return>(...args);
-  } catch (err) {
-    console.error(`[steam-achievements] call(${JSON.stringify(args[0])}) failed:`, err);
-    return undefined;
-  }
-};
+// ─── Achievements: local Decky SteamClient IPC only ─────────────────────────
+// (The Steam Web API fallback — SteamAchievementsClient, api_key/steamid64
+// settings — has been fully removed as of v1.2.3. The badge relies solely on
+// SteamClient.Apps.GetMyAchievementsForApp; no account setup needed.)
 
 // ─── Settings Panel ─────────────────────────────────────────────────────────
 
@@ -323,12 +313,7 @@ const tryLocalAchievements = async (appid: number): Promise<AchievementsResult |
 const queryAchievements = async (appid: number): Promise<AchievementsResult> => {
   const local = await tryLocalAchievements(appid);
   if (local) return local;
-
-  // Fallback: Python backend / Steam Web API (requires API key + SteamID64).
-  const result = await safeCall<AchievementsResult>("get_achievements", appid);
-  console.log(`[steam-achievements] backend result for appid ${appid}:`, result);
-  if (!result) return { found: false, error: "No response from backend" };
-  return { ...result, source: "api" };
+  return { found: false };
 };
 
 const useAchievements = (appid?: number) => {
