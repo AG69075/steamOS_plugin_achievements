@@ -1,4 +1,4 @@
-name: Release
+name: Build and Release
 
 on:
   push:
@@ -9,27 +9,30 @@ permissions:
   contents: write
 
 jobs:
-  build-release:
+  build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Create zip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Package plugin zip
         run: |
-          mkdir -p build
-          zip -r build/plugin-${{ github.ref_name }}.zip \
-            dist \
-            images \
-            main.py \
-            package.json \
-            plugin.json \
-            README.md \
-            -x "*.gitignore"
+          mkdir -p /tmp/pkg/steam-achievements
+          cp -r dist main.py plugin.json package.json README.md /tmp/pkg/steam-achievements/
+          cd /tmp/pkg
+          zip -r steam-achievements.zip steam-achievements
+          mv steam-achievements.zip "$GITHUB_WORKSPACE/steam-achievements.zip"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: build/*.zip
-          tag_name: ${{ github.ref_name }}
-          generate_release_notes: true
+          files: steam-achievements.zip

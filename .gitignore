@@ -1,32 +1,4 @@
-# Node
 node_modules/
-npm-debug.log*
- 
-# JetBrains IDE (PyCharm/IntelliJ)
-.idea/
-*.iml
-*.ipr
-*.iws
- 
-# Python
-__pycache__/
-*.py[cod]
-*.egg-info/
-.venv/
-venv/
- 
-# OS
-.DS_Store
-Thumbs.db
- 
-# Logs
+dist/
 *.log
- 
-# Environment / secrets
-.env
-.env.local
- 
-# Misc
-*.tmp
-*.bak
- 
+.DS_Store
