@@ -26,13 +26,15 @@ jobs:
 
       - name: Package plugin zip
         run: |
+          ZIP_NAME="SteamOS_plugin_achievements_${GITHUB_REF_NAME}.zip"
           mkdir -p /tmp/pkg/steam-achievements
           cp -r dist main.py plugin.json package.json README.md /tmp/pkg/steam-achievements/
           cd /tmp/pkg
-          zip -r steam-achievements.zip steam-achievements
-          mv steam-achievements.zip "$GITHUB_WORKSPACE/steam-achievements.zip"
+          zip -r "$ZIP_NAME" steam-achievements
+          mv "$ZIP_NAME" "$GITHUB_WORKSPACE/$ZIP_NAME"
+          echo "ZIP_NAME=$ZIP_NAME" >> "$GITHUB_ENV"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: steam-achievements.zip
+          files: ${{ env.ZIP_NAME }}

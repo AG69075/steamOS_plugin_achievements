@@ -31,7 +31,7 @@ None — the badge reads achievement data directly from the Steam client, with n
 
 ## Installation
 
-**From a release:** download the latest `steam-achievements.zip` from the [Releases](../../releases) page.
+**From a release:** download the latest `SteamOS_plugin_achievements_vX.Y.Z.zip` from the [Releases](../../releases) page.
 
 1. Transfer it to your Steam Deck.
 2. Open the Decky Loader settings → **Developer** tab.
