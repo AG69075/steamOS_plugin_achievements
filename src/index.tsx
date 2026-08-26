@@ -378,7 +378,7 @@ const _setLaunchingAppid = (appid: number | undefined) => {
     _launchSafetyTimeout = setTimeout(() => {
       console.warn("[steam-achievements] launch safety timeout hit, clearing launching state.");
       _setLaunchingAppid(undefined);
-    }, 20000);
+    }, 300000);
   }
 };
 
