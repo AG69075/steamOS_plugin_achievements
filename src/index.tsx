@@ -10,7 +10,7 @@ import {
   findInReactTree,
   createReactTreePatcher,
   afterPatch,
-  useParams,
+  useParams as deckyUseParams,
 } from "@decky/ui";
 import { FC, Component, ReactNode, useState, useEffect, useRef, useReducer, useCallback, useMemo } from "react";
 
@@ -552,8 +552,24 @@ const useScrolledDown = (rootRef: React.RefObject<HTMLElement>): boolean => {
   return scrolled;
 };
 
+// `useParams` from @decky/ui can be undefined after Steam client updates
+// (TypeError: useParams is not a function). Fall back to parsing the route.
+const useAppIdParam = (): string | undefined => {
+  let fromRouter: string | undefined;
+  if (typeof deckyUseParams === "function") {
+    try {
+      fromRouter = (deckyUseParams as unknown as <T>() => T)<{ appid?: string }>()?.appid;
+    } catch {
+      fromRouter = undefined;
+    }
+  }
+  if (fromRouter) return fromRouter;
+  const m = /\/library\/app\/(\d+)/.exec(window.location.pathname);
+  return m ? m[1] : undefined;
+};
+
 const AchievementsBadge: FC = () => {
-  const { appid } = useParams<{ appid: string }>();
+  const appid = useAppIdParam();
   const numericAppid = appid ? parseInt(appid, 10) : undefined;
   const { data, loading } = useAchievements(numericAppid !== undefined && !Number.isNaN(numericAppid) ? numericAppid : undefined);
   const { settings } = useSettings();
